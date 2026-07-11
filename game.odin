@@ -787,10 +787,10 @@ tick_character_controllers :: proc(game_state: ^GameState, renderer: ^Renderer, 
                 char.acceleration = {world_invector.x, world_invector.y, 0.0}
                 accel_len := hlsl.length(char.acceleration)
                 this_frame_move_speed *= accel_len
-                if accel_len == 0 && collision.state == .Grounded {
-                    to_zero := hlsl.float2 {0.0, 0.0} - collision.velocity.xy
-                    collision.velocity.xy += char.deceleration_speed * to_zero
-                }
+                // if accel_len == 0 && collision.state == .Grounded {
+                //     to_zero := hlsl.float2 {0.0, 0.0} - collision.velocity.xy
+                //     collision.velocity.xy += char.deceleration_speed * to_zero
+                // }
                 collision.velocity.xy += char.acceleration.xy
 
                 // Limit velocity magnitude to this_frame_move_speed
@@ -865,6 +865,17 @@ tick_character_controllers :: proc(game_state: ^GameState, renderer: ^Renderer, 
             char.flags = {}
         }
 
+        @static velocity_bump_x :f32= 100.0
+        @static velocity_bump_z :f32= 10.0
+
+        if imgui.Begin("Dash velocity tinkering") {
+            imgui.SliderFloat3("Player velocity", &collision.velocity, -10.0, 10.0)
+
+            imgui.SliderFloat("Player velocity bump x", &velocity_bump_x, -1000.0, 100.0)
+            imgui.SliderFloat("Player velocity bump z", &velocity_bump_z, -1000.0, 100.0)
+        }
+
+        imgui.End()
         // Shoot command
         {
             res, have_shoot := output_verbs.bools[.PlayerShoot]
@@ -872,7 +883,15 @@ tick_character_controllers :: proc(game_state: ^GameState, renderer: ^Renderer, 
                 if .HoldingEnemy in char.flags {
                     char.flags -= {.HoldingEnemy}
                     throw_dir := ENEMY_THROW_SPEED * linalg.quaternion128_mul_vector3(tform.rotation, DEFAULT_FACING_DIRECTION)
+                    // throw_dir := ENEMY_THROW_SPEED * linalg.quaternion128_mul_vector3(tform.rotation,  DEFAULT_FACING_DIRECTION)
                     new_thrown_enemy(game_state, tform.position, throw_dir, .Wandering, char.enemy_respawn_pos, char.enemy_type)
+                    throw_rebound_dir := throw_dir
+                    // enemy_throw_dir += {velocity_bump_x, 0, velocity_bump_z}
+                    // collision.velocity = {velocity_bump_x, 0, velocity_bump_z}
+                    // lanch player backwards on enemy forwards throw
+                    // collision.velocity = 1000 * throw_rebound_dir
+                    collision.velocity = velocity_bump_x * throw_rebound_dir
+                    collision.velocity += {0.0, 0.0, velocity_bump_z}
                     play_sound_effect(audio_system, game_state.shoot_sound)
                 } else {
                     char.vortex_t = 0.0
